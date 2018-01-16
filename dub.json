@@ -1,0 +1,11 @@
+{
+	"name": "struct2mongo",
+	"authors": [
+		"Christian Duran C"
+	],
+	"dependencies": {
+		"mondo": "~>1.1"
+	},
+	"description": "Mongo wrapper for plug and play usage of structs",
+	"license": "MIT"
+}
