@@ -64,8 +64,11 @@ auto bson (Type)(Type instance) {
         // Compare the fields of each one.
         if (instanceField != __traits(getMember, Type.init, field)
         ) {
-
-            auto toInsert = recursiveBsonArray (instanceField);
+            static if (field == `_id`) {
+                auto toInsert = ObjectId (instanceField);
+            } else {
+                auto toInsert = recursiveBsonArray (instanceField);
+            }
             toReturn.append (field, toInsert);
         }
     } }
