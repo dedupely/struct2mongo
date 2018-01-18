@@ -69,6 +69,7 @@ unittest {
 // A BsonObject converted to BO it's just itself.
 auto bson (BO b) { return b;}
 
+enum MongoKeep;
 BO bson (Type)(Type instance) {
     static assert (__traits (isPOD, Type)
         , `bson (instance) is only implemented for POD structs`);
@@ -79,8 +80,11 @@ BO bson (Type)(Type instance) {
     toReturn.remove (`a`);
     static foreach (field; FieldNameTuple!Type) { {
         auto instanceField = __traits (getMember, instance, field);
-        // Compare the fields of each one.
-        if (instanceField != __traits(getMember, Type.init, field)
+        // Save only the fields with non default values or the ones that
+        // have the @MongoKeep UDA.
+        if (
+            instanceField != __traits(getMember, Type.init, field)
+            || hasUDA! (mixin (`Type.` ~ field), MongoKeep)
         ) {
             static if (field == `_id`) {
                 auto toInsert = ObjectId (instanceField);
@@ -98,14 +102,13 @@ unittest {
         string a = `Hello`;
         int b = 3;
         int [3] c = [2,3,4];
-        bool d = true;
+        @MongoKeep bool d = true;
     }
     // If the default values are used, nothing needs to be saved.
     // Note: This one fails, because internally it hasn't been initted.
     // Should be already fixed on Mondo's master.
     //assert (bson (Foo ()) == BO());
-    BO toCompare = BO (`a`, `b`);
-    toCompare.remove (`a`);
+    BO toCompare = BO (`d`, true);
     assert (bson (Foo ()) == toCompare);
 
     toCompare.append (`b`, 5);
@@ -142,7 +145,7 @@ auto fromBO (Type) (BO bo) {
                 }
                 toAssign = app.data;
             } else {
-                toAssign = bo [field].recursiveArrayMap!(FieldType);
+                toAssign = bo [field].recursiveArrayMap! (FieldType);
             }
             enum fieldToAssign = `toReturn.` ~ field;
             mixin (fieldToAssign ~ ` = toAssign;`);
