@@ -32,6 +32,21 @@ struct Col {
             .map!(a => a.fromBO!S);
     }
 
+    auto aggregate (S = BO, K)(
+          in K aggregate
+        , in BsonObject options = BsonObject.init
+        , in QueryFlags flags = QueryFlags.NONE
+        , in ReadPrefs readPrefs = null
+    ) if (is(Unqual!K == BsonArray) || is(Unqual!K == BsonObject)) {
+        auto toReturn =
+            collection.aggregate (aggregate, options, flags, readPrefs);
+        static if (is (S == BO)) {
+            return toReturn;
+        } else {
+            return toReturn.map!(a => a.fromBO!S);
+        }
+    }
+
     // From here: Just calls to Mondo's methods.
     auto findOne (
           in Query query = Query.init
@@ -61,7 +76,18 @@ unittest {
     assert (collection.findOne!Foo == Foo ());
     assert (collection.find!Foo.front == Foo ());
     collection.insert (Foo (8));
+    assert (
+        collection
+        .aggregate!Foo (BA ([BO(`$match`, BO (`a`, 8))]))
+        .front == Foo (8)
+    );
+
     // Test Mondo's methods.
+    assert (
+        collection
+        .aggregate (BA ([BO(`$match`, BO (`a`, 8))]))
+        .front [`a`] == 8
+    );
     assert (collection.find.array.length == 2);
     assert ((`a` !in collection.findOne ()) || collection.findOne ()[`a`] == 8);
 }
