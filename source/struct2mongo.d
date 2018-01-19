@@ -4,11 +4,70 @@ import mondo;
 import bsond;
 import std.traits, std.range;
 
+enum MongoKeep;
+enum MongoUpdated;
+enum MongoCreated;
 struct Col {
     Collection collection;
-    auto insert (S)(S val) {
+
+    // Version without ref for non-lvalues.
+    auto insert (S)(S val) { this.insert (val); }
+    auto insert (S)(ref S val) {
+        alias created = getSymbolsByUDA!(S, MongoCreated);
+        static assert (
+            created.length < 2
+            , `Are you sure you want several MongoCreated`
+            ~ ` symbols in ` ~ S.stringof ~ `?`
+        );
+        import std.datetime;
+        static if (created.length) {
+            static assert (is (typeof (created [0]) == long));
+            mixin (
+                `val.` ~ __traits (identifier, created [0])
+                ~ ` = Clock.currTime (UTC ()).toUnixTime;`
+            );
+        }
         collection.insert (val.bson);
     }
+
+    // Version without ref for non-lvalues.
+    void update (S)(
+          in BsonObject selector
+        , S update
+        , in UpdateFlags flags = UpdateFlags.NONE
+        , in WriteConcern writeConcern = null
+    ) {
+        this.update!S (selector, update, flags, writeConcern);
+    }
+
+    void update (S)(
+          in BsonObject selector
+        , ref S update
+        , in UpdateFlags flags = UpdateFlags.NONE
+        , in WriteConcern writeConcern = null
+    ) {
+        static if (is (S == BO)) {
+            // Mondo's
+            collection.update (selector, update, flags, writeConcern);
+        } else {
+            alias updated = getSymbolsByUDA!(S, MongoUpdated);
+            static assert (
+                updated.length < 2
+                , `Are you sure you want several MongoUpdated`
+                ~ ` symbols in ` ~ S.stringof ~ `?`
+            );
+            import std.datetime;
+            static if (updated.length) {
+                static assert (is (typeof (updated [0]) == long));
+                mixin (
+                    `update.` ~ __traits (identifier, updated [0]) 
+                    ~ ` = Clock.currTime (UTC ()).toUnixTime;`
+                );
+            }
+            collection.update (selector, update.bson, flags, writeConcern);
+        }
+    }
+
     /// Same parameters as Collection.findOne (except the first one).
     /// S (return type) needs to be specified.
     S findOne (S)(
@@ -82,6 +141,22 @@ unittest {
         .front == Foo (8)
     );
 
+    struct UpdatedTest {
+        int val = 0;
+        @MongoUpdated long updateTime  = 0;
+        @MongoCreated long createdTime = 0;
+    }
+    auto ut = UpdatedTest (1);
+    assert (ut.createdTime == 0);
+    collection.insert (ut);
+    assert (ut.createdTime != 0);
+    ut.val = 2;
+    assert (ut.updateTime == 0);
+    collection.update (BO (`val`, 1), ut);
+    assert (ut.updateTime != 0);
+
+    collection.remove (BO (`val`, 2));
+
     // Test Mondo's methods.
     assert (
         collection
@@ -90,12 +165,17 @@ unittest {
     );
     assert (collection.find.array.length == 2);
     assert ((`a` !in collection.findOne ()) || collection.findOne ()[`a`] == 8);
+
+    auto find16 = new Query;
+    find16.conditions = BO (`a`, 16);
+    collection.update (BO (`a`, 8), BO (`a`, 16));
+    assert (! collection.find (find16).empty);
+
 }
 
 // A BsonObject converted to BO it's just itself.
 auto bson (BO b) { return b;}
 
-enum MongoKeep;
 BO bson (Type)(Type instance) {
     static assert (__traits (isPOD, Type)
         , `bson (instance) is only implemented for POD structs`);
