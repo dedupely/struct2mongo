@@ -229,6 +229,7 @@ unittest {
     
 }
 
+/// Converts bo to Type by using the field names of Type and keys of bo.
 auto fromBO (Type) (BO bo) {
     static assert (__traits (isPOD, Type)
         , "fromBO is made for POD structs.\n"
@@ -236,25 +237,36 @@ auto fromBO (Type) (BO bo) {
         ~ `'s fields and comment this warning.`);
     alias TypeFields = FieldNameTuple!Type;
     Type toReturn;
-    static foreach (field; TypeFields) {
-        if (field in bo) {
-            alias FieldType = typeof (mixin (`Type.` ~ field));
-            FieldType toAssign;
-            static if (field == `_id` && is (FieldType == string)) {
-                // Slightly modified version of Mondo's ObjectId.toString ()
-                // Allows casting the ObjectId back to a string.
-                static immutable char[] digits = "0123456789abcdef";
-                auto app = appender!string;
-                foreach (b; bo [field].to!ObjectId._data) {
-                    app.put (digits [b >> 4]);
-                    app.put (digits [b & 0xF]);
-                }
-                toAssign = app.data;
-            } else {
-                toAssign = bo [field].recursiveArrayMap! (FieldType);
+    foreach (key, val; bo) {
+        outerSwitch: switch (key) {
+            static foreach (field; TypeFields) {
+                case field:
+                    alias FieldType = typeof (mixin (`Type.` ~ field));
+                    FieldType toAssign;
+                    static if (field == `_id` && is (FieldType == string)) {
+                        // Slightly modified version of Mondo's ObjectId.toString ()
+                        // Allows casting the ObjectId back to a string.
+                        static immutable char[] digits = "0123456789abcdef";
+                        auto app = appender!string;
+                        foreach (b; bo [field].to!ObjectId._data) {
+                            app.put (digits [b >> 4]);
+                            app.put (digits [b & 0xF]);
+                        }
+                        toAssign = app.data;
+                    } else {
+                        toAssign = bo [field].recursiveArrayMap! (FieldType);
+                    }
+                    enum fieldToAssign = `toReturn.` ~ field;
+                    mixin (fieldToAssign ~ ` = toAssign;`);
+                    break outerSwitch;
             }
-            enum fieldToAssign = `toReturn.` ~ field;
-            mixin (fieldToAssign ~ ` = toAssign;`);
+            default:
+                // _id is the only field that is allowed to be on the BO
+                // and not on the struct, if bo has some other field that the
+                // struct doesn't, an exception is thrown.
+                if (key != `_id`)
+                    throw new Exception (`Found member of BO that is not in `
+                        ~ Type.stringof ~ ` : ` ~ key);
         }
     }
     return toReturn;
@@ -285,6 +297,11 @@ unittest {
     assert (fromBO!WithId (boWithId) == idCheck);
     auto objectIdCheck = WithObjectId (ObjectId(`bbbbbbbbbbbbbbbbbbbbbbbb`));
     assert (fromBO!WithObjectId (boWithId) == objectIdCheck);
+
+    // Using a BO with other fields should throw an exception:
+    auto extraFields = BO (`a`, 3, `g`, 8);
+    import std.exception;
+    assertThrown (fromBO!Test (extraFields));
 }
 
 import std.algorithm : map;
