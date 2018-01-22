@@ -10,7 +10,8 @@ enum MongoCreated;
 struct Col {
     Collection collection;
 
-    auto trySeveralTimes (alias Op, Args...)(uint times, Args args) {
+    auto trySeveralTimes (alias Op, uint timesT = 10, Args...)(Args args) {
+        uint times = timesT;
         tryAgain:
         try {
             return Op (args);
@@ -44,7 +45,7 @@ struct Col {
         // Be careful, this deletes the Collection.
         if (collection.exists) collection.drop;
 
-        return collection.trySeveralTimes!(insert)(1, TestStruct (3));
+        return collection.trySeveralTimes!insert(TestStruct (3));
     }
 
     // Version without ref for non-lvalues.
