@@ -10,6 +10,43 @@ enum MongoCreated;
 struct Col {
     Collection collection;
 
+    auto trySeveralTimes (alias Op, Args...)(uint times, Args args) {
+        tryAgain:
+        try {
+            return Op (args);
+        } catch (MongoException e) {
+            if (e.domain == ErrorDomains.SERVER_SELECTION
+                || e.domain == ErrorDomains.STREAM) {
+
+                import std.stdio;
+                writeln (`Connection failed, trying again.`);
+                import core.thread;
+                Thread.sleep (1.dur!`seconds`);
+                times --;
+                if (times == 0) {
+                    throw e;
+                } else {
+                    goto tryAgain; // Yeah.
+                }
+            }
+        }
+    }
+
+    unittest {
+        import std.stdio;
+        struct TestStruct {
+            int foo;
+        }
+
+        Mongo mongo = new Mongo("mongodb://localhost");
+        assert (mongo.connected, `Not connected to Mongo`);
+        auto collection = Col (mongo [`newBase`][`newCollection`]);
+        // Be careful, this deletes the Collection.
+        if (collection.exists) collection.drop;
+
+        return collection.trySeveralTimes!(insert)(1, TestStruct (3));
+    }
+
     // Version without ref for non-lvalues.
     auto insert (S)(S val) { this.insert (val); }
     auto insert (S)(ref S val) {
