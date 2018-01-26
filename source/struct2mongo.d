@@ -7,6 +7,7 @@ import std.traits, std.range;
 enum MongoKeep;
 enum MongoUpdated;
 enum MongoCreated;
+
 struct Col {
     Collection collection;
 
