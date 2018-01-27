@@ -48,7 +48,6 @@ version (vibed) {
             } else {
                 static assert (0, `Don't know what to do.`);
             }
-            return true;
         }
     }
 
