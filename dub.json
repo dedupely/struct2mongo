@@ -6,6 +6,14 @@
 	"dependencies": {
 		"mondo": "~>1.1"
 	},
+    "configurations" : [ {
+        "name" : "vibed",
+        "dependencies": {
+            "mondo": "~>1.1",
+            "vibe-d": "~>0.8.2"
+        },
+        "versions" : ["vibed", "VibeUseOpenSSL11"]
+    } ],
 	"description": "Mongo wrapper for plug and play usage of structs",
 	"license": "MIT"
 }

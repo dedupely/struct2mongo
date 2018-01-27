@@ -17,6 +17,8 @@ version (vibed) {
             this.connectionString = connectionString;
             assert (mongoPool is null);
             mongoPool = new MongoPool (connectionString);
+            mongoPool.max = maxConnections;
+
             this.connections = new ConnectionPool!Mongo (
                 &connectionFactory, maxConnections
             );
